@@ -1,16 +1,21 @@
 <?php
 
-namespace App\Http\Controllers\categories;
+namespace App\Http\Controllers\orders;
 
 use App\Http\Controllers\Controller;
-use App\Http\Traits\GeneralTrait;
-use App\Models\Category;
+
 use App\Models\Product;
+use App\Models\Order;
+use App\Models\User;
 use Illuminate\Http\Request;
+use App\Http\Traits\GeneralTrait;
 use Validator;
 
-class CategoryController extends Controller
+
+
+class OrderController extends Controller
 {
+
     use GeneralTrait;
     /**
      * Display a listing of the resource.
@@ -19,15 +24,15 @@ class CategoryController extends Controller
      */
     public function index()
     {
+
         try {
-            $msg = 'all Categories are Right Here';
-            $data = Category::with('products')->get();
+            $msg = 'all orders are Right Here';
+            $data = Order::with('user')->get();
             return $this->successResponse($data, $msg);
         } catch (\Exception $ex) {
             return $this->errorResponse($ex->getMessage(), 500);
         }
     }
-
 
     /**
      * Store a newly created resource in storage.
@@ -38,11 +43,15 @@ class CategoryController extends Controller
     public function store(Request $request)
     {
 
+
         $validator = Validator::make(
             $request->all(),
             [
-                'category_name' => 'required|regex:/[a-zA-Z\s]+/',
-                'desc' => 'required|string',
+                'user_id' => 'required|integer',
+                'product_id' => 'required|array',
+                'product_id.*' => 'integer',
+                'quantity' => 'required|array',
+                'quantity.*' => 'integer',
             ]
         );
         if ($validator->fails()) {
@@ -50,9 +59,19 @@ class CategoryController extends Controller
         }
         try {
 
-            $category = Category::create($request->all());
-            $data = $category;
-            $msg = 'Category is created successfully';
+            $products_id = $request->input('product_id');
+            $quantities = $request->input('quantity');
+            if (sizeof($products_id) != sizeof($quantities)) {
+                return $this->errorResponse('the products must equals quantities', 422);
+            }
+            $user = User::findOrFail($request->input('user_id'));
+            $order = Order::create($request->all());
+            $order->user()->associate($user);
+            for ($i = 0; $i < sizeof($products_id); $i++) {
+                $order->products()->attach($products_id[$i], ['quantity' => $quantities[$i]]);
+            }
+            $data = $order->with('products')->get();
+            $msg = 'order is created successfully';
             return $this->successResponse($data, $msg, 201);
         } catch (\Exception $ex) {
             return $this->errorResponse($ex->getMessage(), 500);
@@ -67,11 +86,15 @@ class CategoryController extends Controller
      */
     public function show($id)
     {
+
         try {
-            $data = Category::with('products')->find($id);
+            $data = Order::with('products')->find($id);
+
             if (!$data)
-                return $this->errorResponse('No Category with such id', 404);
-            $msg = 'Got you the Category you are looking for';
+                return $this->errorResponse('No order with such id', 404);
+
+            $this->authorize('view', $data);
+            $msg = 'Got you the order you are looking for';
             return $this->successResponse($data, $msg);
         } catch (\Exception $ex) {
             return $this->errorResponse($ex->getMessage(), 500);
@@ -87,17 +110,7 @@ class CategoryController extends Controller
      */
     public function update(Request $request, $id)
     {
-        try {
-            $data = Category::find($id);
-            if (!$data)
-                return $this->errorResponse('No Category with such id', 404);
-
-            $data->update($request->all());
-            $msg = 'The Category is updated successfully';
-            return $this->successResponse($data, $msg);
-        } catch (\Exception $ex) {
-            return $this->errorResponse($ex->getMessage(), 500);
-        }
+        
     }
 
     /**
@@ -108,13 +121,16 @@ class CategoryController extends Controller
      */
     public function destroy($id)
     {
-        try {
-            $data = Category::find($id);
-            if (!$data)
-                return $this->errorResponse('No category with such id', 404);
 
+        try {
+            $data = Order::find($id);
+
+            if (!$data)
+                return $this->errorResponse('No order with such id', 404);
+
+            $this->authorize('delete', $data);
             $data->delete();
-            $msg = 'The category is deleted successfully';
+            $msg = 'The order is deleted successfully';
             return $this->successResponse($data, $msg);
         } catch (\Exception $ex) {
             return $this->errorResponse($ex->getMessage(), 500);

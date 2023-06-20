@@ -1,16 +1,20 @@
 <?php
 
-namespace App\Http\Controllers\products;
+namespace App\Http\Controllers\reviews;
+
+use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Product;
-use Illuminate\Http\Request;
+use App\Models\Review;
+use App\Models\User;
+
+
 use App\Http\Traits\GeneralTrait;
 use Validator;
-use function Nette\Utils\isEmail;
-use function PHPUnit\Framework\isEmpty;
 
-class ProductController extends Controller
+
+class ReviewController extends Controller
 {
     use GeneralTrait;
     /**
@@ -20,14 +24,15 @@ class ProductController extends Controller
      */
     public function index()
     {
-       try{
-           $msg='all products are Right Here';
-           $data=Product::with('category')->get();
-           return $this->successResponse($data,$msg);
-       }
-       catch (\Exception $ex){
-           return $this->errorResponse($ex->getMessage(),500);
-       }
+   
+        try{
+            $msg='all reviews are Right Here';
+            $data=Review::with(['user','product'])->get();
+            return $this->successResponse($data,$msg);
+        }
+        catch (\Exception $ex){
+            return $this->errorResponse($ex->getMessage(),500);
+        }
     }
 
     /**
@@ -40,22 +45,23 @@ class ProductController extends Controller
     {
 
         $validator=Validator::make($request->all(),[
-            'product_name'=>'required|regex:/[a-zA-Z\s]+/',
-                'desc'=>'required|string',
-                'price'=>'required|numeric'
+            'user_id'=>'required|integer',
+                'product_id'=>'required|integer',
+                'comment'=>'required|regex:/[a-zA-Z\s]+/',
+                'rating'=>'required|integer'
             ]
         );
                 if($validator->fails()){
             return $this->errorResponse($validator->errors(),422);
         }
       try {
-            $category = Category::firstOrCreate([
-                'category_name' => $request->category_name
-            ]);
-            $product = Product::create($request->all());
-            $product->category()->associate($category);
-           $data=$product;
-           $msg='product is created successfully';
+            $user = User::find($request->user_id);
+            $product = Product::find($request->product_id);
+            $review = Review::create($request->all());
+            $review->user()->associate($user);
+            $review->product()->associate($product);
+           $data=$review;
+           $msg='review is created successfully';
             return $this->successResponse($data,$msg,201);
         }
         catch (\Exception $ex)
@@ -67,19 +73,18 @@ class ProductController extends Controller
     /**
      * Display the specified resource.
      *
-     * @param  \App\Models\Poduct  $poduct
+     * @param  int  $id
      * @return \Illuminate\Http\Response
      */
     public function show($id)
     {
-
         try{
-            $data=Product::with('category')->find($id);
+            $data=Review::with(['user','product'])->find($id);
             if(!$data)
-                return $this->errorResponse('No product with such id',404);
+                return $this->errorResponse('No Review with such id',404);
 
-
-            $msg='Got you the product you are looking for';
+            $this->authorize('view', $data);
+            $msg='Got you the Review you are looking for';
             return $this->successResponse($data,$msg);
         }
         catch (\Exception $ex){
@@ -91,20 +96,20 @@ class ProductController extends Controller
      * Update the specified resource in storage.
      *
      * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\Product  $poduct
+     * @param  int  $id
      * @return \Illuminate\Http\Response
      */
     public function update(Request $request, $id)
     {
-
+        
         try{
-            $data=Product::find($id);
+            $data=Review::find($id);
             if(!$data)
-                return $this->errorResponse('No product with such id',404);
-
+                return $this->errorResponse('No Review with such id',404);
+ 
+            $this->authorize('update', $data);
             $data->update($request->all());
-    
-            $msg='The product is updated successfully';
+            $msg='The Review is updated successfully';
             return $this->successResponse($data,$msg);
         }
         catch (\Exception $ex){
@@ -115,37 +120,24 @@ class ProductController extends Controller
     /**
      * Remove the specified resource from storage.
      *
-     * @param  \App\Models\Poduct  $poduct
+     * @param  int  $id
      * @return \Illuminate\Http\Response
      */
     public function destroy($id)
     {
+    
         try{
-            $data=Product::find($id);
+            $data=Review::find($id);
             if(!$data)
-                return $this->errorResponse('No product with such id',404);
+                return $this->errorResponse('No Review with such id',404);
 
+            $this->authorize('delete', $data);
             $data->delete();
-            $msg='The product is deleted successfully';
+            $msg='The Review is deleted successfully';
             return $this->successResponse($data,$msg);
         }
         catch (\Exception $ex){
             return $this->errorResponse($ex->getMessage(),500);
         }
-    }
-
-    public function  filterProductsByCategory($letter)
-    {
-        try {
-            $data= Product::whereRelation('category','category_name','like',$letter.'%')->with('category')->get();
-           if (count($data)==0) {
-            $msg='Category not found';
-            return $this->successResponse($data,$msg);
-           }else{
-            $msg='Got data Successfully';
-            return $this->successResponse($data,$msg);}
-        }
-    catch (\Exception $ex)
-    { return $this->errorResponse($ex->getMessage(),500); }
     }
 }
